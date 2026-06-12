@@ -69,7 +69,7 @@ function rowToDto(r: RecordingRow) {
 
 export function buildServer(deps: ApiDeps): FastifyInstance {
   const { db, bus, dataDir } = deps;
-  const app = Fastify();
+  const app = Fastify({ ajv: { customOptions: { coerceTypes: false } } });
 
   const recordingsRoot = path.join(dataDir, 'recordings');
   fs.mkdirSync(recordingsRoot, { recursive: true });
@@ -81,7 +81,7 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     app.register(fastifyStatic, { root: deps.webDistDir, prefix: '/', decorateReply: true });
     // SPA fallback: any non-API GET serves index.html
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/media')) {
+      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/media')) {
         return (reply as any).sendFile('index.html');
       }
       reply.code(404).send({ error: 'not found' });
@@ -91,7 +91,9 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
   // --- streamers
   app.get('/api/streamers', async () => ({ streamers: buildStreamerViews(deps), stale: deps.watcher.isStale() }));
 
-  app.post('/api/streamers', async (req, reply) => {
+  app.post('/api/streamers', {
+    schema: { body: { type: 'object', required: ['nameOrUrl'], properties: { nameOrUrl: { type: 'string' } }, additionalProperties: false } },
+  }, async (req, reply) => {
     const { nameOrUrl } = req.body as { nameOrUrl?: string };
     const login = parseLoginFromInput(nameOrUrl ?? '');
     if (!login) return reply.code(400).send({ error: 'invalid name or URL' });
@@ -102,7 +104,9 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     return reply.code(201).send({ login: user.login });
   });
 
-  app.patch('/api/streamers/:login', async (req, reply) => {
+  app.patch('/api/streamers/:login', {
+    schema: { body: { type: 'object', properties: { autoRecord: { type: 'boolean' }, quality: { type: 'string', minLength: 1, maxLength: 100 } }, additionalProperties: false } },
+  }, async (req, reply) => {
     const { login } = req.params as { login: string };
     if (!getStreamer(db, login)) return reply.code(404).send({ error: 'unknown streamer' });
     const body = req.body as { autoRecord?: boolean; quality?: string };
@@ -148,7 +152,9 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     return rowToDto(rec);
   });
 
-  app.patch('/api/recordings/:id', async (req, reply) => {
+  app.patch('/api/recordings/:id', {
+    schema: { body: { type: 'object', properties: { pinned: { type: 'boolean' }, watchedAt: { type: 'string' }, resumePositionS: { type: 'number', minimum: 0 }, chatOffsetMs: { type: 'integer' } }, additionalProperties: false } },
+  }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!getRecording(db, id)) return reply.code(404).send({ error: 'not found' });
     const b = req.body as { pinned?: boolean; watchedAt?: string; resumePositionS?: number; chatOffsetMs?: number };
@@ -168,7 +174,11 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     if (rec.status === 'recording' || rec.status === 'finalizing') {
       return reply.code(409).send({ error: 'recording in progress — stop it first' });
     }
-    fs.rmSync(path.join(dataDir, rec.dir_path), { recursive: true, force: true });
+    const target = path.resolve(dataDir, rec.dir_path);
+    if (!target.startsWith(recordingsRoot + path.sep)) {
+      return reply.code(500).send({ error: 'corrupt dir_path — refusing to delete' });
+    }
+    fs.rmSync(target, { recursive: true, force: true });
     deleteRecording(db, id);
     return { ok: true };
   });
@@ -210,6 +220,7 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
 
   // --- SSE
   app.get('/api/events', (req, reply) => {
+    reply.hijack();
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',

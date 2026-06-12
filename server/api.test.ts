@@ -144,6 +144,26 @@ test('media serving with range support', async () => {
   expect(res.body).toBe('CDEF');
 });
 
+test('DELETE refuses recordings whose dir_path escapes the recordings root', async () => {
+  upsertStreamer(db, { login: 'a', display_name: 'A', avatar_url: '' });
+  const outside = path.join(dataDir, 'outside-marker');
+  fs.writeFileSync(outside, 'precious');
+  const id = insertRecording(db, { streamer_login: 'a', started_at: 'now', title: '', game: '', dir_path: '..' });
+  updateRecording(db, id, { status: 'ready' });
+  const res = await app.inject({ method: 'DELETE', url: `/api/recordings/${id}` });
+  expect(res.statusCode).toBe(500);
+  expect(fs.existsSync(outside)).toBe(true); // nothing outside recordings/ was touched
+});
+
+test('PATCH recordings rejects wrong-typed bodies', async () => {
+  upsertStreamer(db, { login: 'a', display_name: 'A', avatar_url: '' });
+  const id = insertRecording(db, { streamer_login: 'a', started_at: 'now', title: '', game: '', dir_path: 'recordings/a/z' });
+  let res = await app.inject({ method: 'PATCH', url: `/api/recordings/${id}`, payload: { resumePositionS: 'not-a-number' } });
+  expect(res.statusCode).toBe(400);
+  res = await app.inject({ method: 'POST', url: '/api/streamers', payload: { nameOrUrl: 123 } });
+  expect(res.statusCode).toBe(400);
+});
+
 test('SSE endpoint streams bus events', async () => {
   upsertStreamer(db, { login: 'a', display_name: 'A', avatar_url: '' });
   statuses = [status('a', false)];
