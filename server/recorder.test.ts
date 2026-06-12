@@ -204,3 +204,29 @@ test('same-minute restart gets a distinct directory', async () => {
   const dirs = listRecordings(db).map(r => r.dir_path);
   expect(new Set(dirs).size).toBe(2);
 });
+
+test('stop of a restarted job is not shadowed by a previous in-flight stop', async () => {
+  let releaseFirstFinalize!: () => void;
+  const gate = new Promise<void>(r => { releaseFirstFinalize = r; });
+  let finalizeCalls = 0;
+  const bus = createBus();
+  const recorder = createRecorder({
+    db, dataDir, bus,
+    spawnFn: ((cmd: string, args: string[]) => { const child = new FakeChild(); spawned.push({ cmd, args, child }); return child; }) as any,
+    finalizeFn: async (_db, recId) => { finalizeCalls++; if (finalizeCalls === 1) await gate; finalized.push(recId); },
+    chat: { join: () => {}, part: () => {} },
+    isLive: () => true, getFreeBytes: () => 100e9, restartDelayMs: 5, killTimeoutMs: 10,
+  });
+  recorder.start('streamerone', STATUS);
+  const firstStop = recorder.stop('streamerone');     // blocks inside finalizeFn
+  recorder.start('streamerone', STATUS);              // streamer went live again -> generation 2
+  expect(recorder.active()).toEqual(['streamerone']);
+  const secondStop = recorder.stop('streamerone');    // must stop generation 2, not return firstStop
+  releaseFirstFinalize();
+  await Promise.all([firstStop, secondStop]);
+  expect(finalizeCalls).toBe(2);                  // both generations finalized
+  expect(recorder.active()).toEqual([]);
+  const rows = listRecordings(db);
+  expect(rows).toHaveLength(2);
+  for (const r of rows) expect(r.ended_at).not.toBeNull();
+});

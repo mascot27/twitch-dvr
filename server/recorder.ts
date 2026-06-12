@@ -51,6 +51,7 @@ interface Job {
   stopping: boolean;
   fastFails: number;
   spawnedAt: number;
+  spawnFailed: boolean;
 }
 
 export const defaultSpawn = (cmd: string, args: string[], opts?: object): ChildLike =>
@@ -86,6 +87,7 @@ export function createRecorder(deps: RecorderDeps): Recorder {
       // a missing/broken streamlink binary emits 'error' and never 'exit';
       // without this handler the whole daemon would crash
       closeErrFd(job);
+      job.spawnFailed = true;
       if (job.stopping) return;
       abandon(job, `streamlink could not start — ${err.message}`);
     });
@@ -134,7 +136,7 @@ export function createRecorder(deps: RecorderDeps): Recorder {
     const job: Job = {
       recId, login, absDir, partNo: 1, quality,
       child: null, caffeinate: null, errFd: null, timer: null,
-      stopping: false, fastFails: 0, spawnedAt: 0,
+      stopping: false, fastFails: 0, spawnedAt: 0, spawnFailed: false,
     };
     jobs.set(login, job);
     deps.chat.join(login, path.join(absDir, 'chat.jsonl'), Date.now());
@@ -165,7 +167,7 @@ export function createRecorder(deps: RecorderDeps): Recorder {
     job.stopping = true;
     if (job.timer) clearTimeout(job.timer);
     deps.chat.part(job.login);
-    if (job.child && job.child.exitCode === null) {
+    if (job.child && job.child.exitCode === null && !job.spawnFailed) {
       job.child.kill('SIGINT'); // streamlink flushes the output file on SIGINT
       await waitExit(job.child, killTimeout);
     }
@@ -185,11 +187,15 @@ export function createRecorder(deps: RecorderDeps): Recorder {
   }
 
   function stop(login: string): Promise<void> {
-    const inflight = stopsInFlight.get(login);
-    if (inflight) return inflight; // concurrent callers share one stop
+    // a job present in `jobs` is by construction not being stopped yet
+    // (doStop deletes it synchronously first) — only fall back to a shared
+    // in-flight stop when there is no current job, so a stop of generation N
+    // never shadows the stop of a restarted generation N+1
     const job = jobs.get(login);
-    if (!job) return Promise.resolve();
-    const p = doStop(job).finally(() => stopsInFlight.delete(login));
+    if (!job) return stopsInFlight.get(login) ?? Promise.resolve();
+    const p = doStop(job).finally(() => {
+      if (stopsInFlight.get(login) === p) stopsInFlight.delete(login);
+    });
     stopsInFlight.set(login, p);
     return p;
   }
