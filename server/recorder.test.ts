@@ -40,6 +40,7 @@ function make(extra: { freeBytes?: number } = {}) {
     isLive: () => live,
     getFreeBytes: () => extra.freeBytes ?? 100e9,
     restartDelayMs: 5,
+    killTimeoutMs: 10,
   }) };
 }
 
@@ -56,7 +57,7 @@ test('start spawns streamlink + caffeinate, creates dir and row, joins chat', ()
   expect(spawned[0].args).toContain('best');
   expect(spawned[0].args.join(' ')).toMatch(/part-001\.ts/);
   expect(spawned[1].cmd).toBe('caffeinate');
-  expect(spawned[1].args).toEqual(['-i', '-w', '4242']);
+  expect(spawned[1].args).toEqual(['-i', '-w', String(process.pid)]);
   const rec = listRecordings(db)[0];
   expect(rec.status).toBe('recording');
   expect(rec.title).toBe('Cool Stream');
@@ -82,6 +83,7 @@ test('restarts with next part when child exits while still live', async () => {
   const slArgs = spawned.filter(s => s.cmd === 'streamlink');
   expect(slArgs).toHaveLength(2);
   expect(slArgs[1].args.join(' ')).toMatch(/part-002\.ts/);
+  expect(spawned.filter(s => s.cmd === 'caffeinate')).toHaveLength(1);
 });
 
 test('finalizes when child exits and stream is no longer live', async () => {
@@ -100,6 +102,7 @@ test('stop kills child, marks finalizing then calls finalize', async () => {
   const recId = listRecordings(db)[0].id;
   await recorder.stop('streamerone');
   expect(spawned[0].child.killed.length).toBeGreaterThan(0);
+  expect(spawned[1].child.killed.length).toBeGreaterThan(0);
   expect(finalized).toEqual([recId]);
   const rec = getRecording(db, recId)!;
   expect(rec.ended_at).not.toBeNull();
@@ -127,4 +130,77 @@ test('refuses to start when free disk below 10GB and notifies', () => {
   expect(recorder.active()).toEqual([]);
   expect(listRecordings(db)).toHaveLength(0);
   expect(notices.length).toBe(1);
+});
+
+test('spawn error marks recording failed without crashing or hanging', async () => {
+  const bus = createBus();
+  const notices: string[] = [];
+  bus.on('notify', n => notices.push(n.title));
+  const recorder = createRecorder({
+    db, dataDir, bus,
+    spawnFn: ((cmd: string, args: string[]) => { const child = new FakeChild(); spawned.push({ cmd, args, child }); return child; }) as any,
+    finalizeFn: async () => { throw new Error('no part files to finalize'); },
+    chat: { join: () => {}, part: () => {} },
+    isLive: () => true, getFreeBytes: () => 100e9, restartDelayMs: 5, killTimeoutMs: 10,
+  });
+  recorder.start('streamerone', STATUS);
+  spawned[0].child.emit('error', new Error('spawn streamlink ENOENT'));
+  await vi.waitFor(() => expect(listRecordings(db)[0].status).toBe('failed'));
+  expect(recorder.active()).toEqual([]);
+  expect(notices).toContain('Recording failed');
+});
+
+test('stop resolves even when the child never exits (hard deadline)', async () => {
+  class StubbornChild extends FakeChild {
+    kill() { this.killed.push('ignored'); return false; } // never exits
+  }
+  let first = true;
+  const bus = createBus();
+  const recorder = createRecorder({
+    db, dataDir, bus,
+    spawnFn: ((cmd: string, args: string[]) => {
+      const child = first && cmd === 'streamlink' ? new StubbornChild() : new FakeChild();
+      if (cmd === 'streamlink') first = false;
+      spawned.push({ cmd, args, child });
+      return child;
+    }) as any,
+    finalizeFn: async (_db, recId) => { finalized.push(recId); },
+    chat: { join: () => {}, part: () => {} },
+    isLive: () => true, getFreeBytes: () => 100e9, restartDelayMs: 5, killTimeoutMs: 10,
+  });
+  recorder.start('streamerone', STATUS);
+  await recorder.stop('streamerone'); // resolves via hard deadline (10*2+1000 ms max)
+  expect(finalized).toHaveLength(1);
+});
+
+test('concurrent stops share one in-flight stop', async () => {
+  const { recorder } = make();
+  recorder.start('streamerone', STATUS);
+  const recId = listRecordings(db)[0].id;
+  await Promise.all([recorder.stop('streamerone'), recorder.stop('streamerone')]);
+  expect(finalized).toEqual([recId]); // finalize ran exactly once
+});
+
+test('gives up after repeated immediate exits', async () => {
+  const { recorder, bus } = make();
+  const bodies: string[] = [];
+  bus.on('notify', n => bodies.push(n.body));
+  recorder.start('streamerone', STATUS);
+  for (let i = 0; i < 5; i++) {
+    const sl = spawned.filter(s => s.cmd === 'streamlink');
+    sl[sl.length - 1].child.exit(1);
+    await new Promise(r => setTimeout(r, 15));
+  }
+  await vi.waitFor(() => expect(recorder.active()).toEqual([]));
+  expect(bodies.some(b => b.includes('giving up'))).toBe(true);
+  expect(spawned.filter(s => s.cmd === 'streamlink')).toHaveLength(5);
+});
+
+test('same-minute restart gets a distinct directory', async () => {
+  const { recorder } = make();
+  recorder.start('streamerone', STATUS);
+  await recorder.stop('streamerone');
+  recorder.start('streamerone', STATUS);
+  const dirs = listRecordings(db).map(r => r.dir_path);
+  expect(new Set(dirs).size).toBe(2);
 });
