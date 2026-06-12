@@ -27,6 +27,7 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
   let lastStatuses: StreamStatus[] = [];
   let failCount = 0;
   let timer: NodeJS.Timeout | null = null;
+  let stopped = false;
   let ticking = false;
 
   async function tick(): Promise<void> {
@@ -34,9 +35,17 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
     ticking = true;
     try {
       const logins = listStreamers(db).map(s => s.login);
+
+      // Fix 2: prune state for logins no longer tracked
+      const known = new Set(logins);
+      for (const k of [...consideredLive.keys()]) {
+        if (!known.has(k)) { consideredLive.delete(k); offlineCount.delete(k); }
+      }
+
       if (!logins.length) {
         lastStatuses = [];
-        bus.emit('status', { statuses: [], stale: false });
+        // Fix 3: report real staleness in empty-streamers branch
+        bus.emit('status', { statuses: [], stale: isStale() });
         return;
       }
       let statuses: StreamStatus[];
@@ -49,7 +58,8 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
         return;
       }
       for (const s of statuses) {
-        if (s.avatarUrl || s.displayName !== s.login) updateStreamerMeta(db, s.login, s.displayName, s.avatarUrl);
+        // Fix 4: don't clobber stored avatars with ''
+        if (s.avatarUrl) updateStreamerMeta(db, s.login, s.displayName, s.avatarUrl);
         const wasLive = consideredLive.get(s.login) ?? false;
         if (s.live) {
           offlineCount.set(s.login, 0);
@@ -77,18 +87,23 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
 
   function isStale(): boolean { return failCount >= STALE_AFTER_FAILURES; }
 
+  // Fix 1: wrap tick so a throwing listener doesn't kill the schedule loop
+  const safeTick = () => tick().catch(err => console.error('[watcher] tick failed', err));
+
   return {
     tick,
     start() {
       if (timer) return;
-      void tick();
+      stopped = false;
+      void safeTick();
       const schedule = () => {
+        if (stopped) return;
         const ms = Math.max(30, parseInt(getSetting(db, 'poll_interval_s'), 10) || 60) * 1000;
-        timer = setTimeout(async () => { await tick(); schedule(); }, ms);
+        timer = setTimeout(async () => { await safeTick(); schedule(); }, ms);
       };
       schedule();
     },
-    stop() { if (timer) clearTimeout(timer); timer = null; },
+    stop() { stopped = true; if (timer) clearTimeout(timer); timer = null; },
     getStatuses: () => lastStatuses,
     isConsideredLive: (login) => consideredLive.get(login) ?? false,
     isStale,

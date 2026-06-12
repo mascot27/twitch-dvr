@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import { createBus } from './events.js';
-import { openDb, upsertStreamer, getStreamer, type Db } from './db.js';
+import { openDb, upsertStreamer, getStreamer, deleteStreamer, type Db } from './db.js';
 import { createWatcher } from './watcher.js';
 import type { StreamStatus } from './types.js';
 
@@ -76,7 +76,43 @@ test('start() polls on interval from settings', async () => {
   const { watcher } = make(async () => { calls++; return [status('a', false)]; });
   watcher.start();
   await vi.advanceTimersByTimeAsync(60_000 * 2 + 500);
-  expect(calls).toBeGreaterThanOrEqual(2);
+  expect(calls).toBe(3); // immediate + 2 scheduled
   watcher.stop();
+  vi.useRealTimers();
+});
+
+test('a throwing live listener does not kill subsequent ticks', async () => {
+  const bus = createBus();
+  const watcher = createWatcher({ db, bus, fetchStatuses: async () => [status('a', true)] });
+  bus.on('live', () => { throw new Error('listener boom'); });
+  const statuses: boolean[] = [];
+  bus.on('status', () => statuses.push(true));
+  await expect(watcher.tick()).rejects.toThrow('listener boom'); // tick itself rejects...
+  await watcher.tick(); // ...but the watcher stays functional
+  expect(watcher.isConsideredLive('a')).toBe(true);
+  expect(statuses.length).toBeGreaterThanOrEqual(1);
+});
+
+test('remove-then-re-add while live re-emits live', async () => {
+  const { events, watcher } = make(async () => [status('a', true)]);
+  await watcher.tick();
+  expect(events).toEqual(['live:a']);
+  deleteStreamer(db, 'a');
+  await watcher.tick(); // prunes state
+  upsertStreamer(db, { login: 'a', display_name: 'a', avatar_url: '' });
+  await watcher.tick();
+  expect(events).toEqual(['live:a', 'live:a']);
+});
+
+test('stop() halts polling even when called mid-cycle', async () => {
+  vi.useFakeTimers();
+  let calls = 0;
+  const { watcher } = make(async () => { calls++; return [status('a', false)]; });
+  watcher.start();
+  await vi.advanceTimersByTimeAsync(60_500);
+  watcher.stop();
+  const after = calls;
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(calls).toBe(after);
   vi.useRealTimers();
 });
