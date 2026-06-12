@@ -66,6 +66,19 @@ test('recording lifecycle', () => {
   expect(listRecordings(db)).toEqual([]);
 });
 
+test('updateRecording ignores undefined values, empty patches and unknown keys', () => {
+  const db = freshDb();
+  upsertStreamer(db, { login: 'x', display_name: 'X', avatar_url: '' });
+  const id = insertRecording(db, { streamer_login: 'x', started_at: 'now', title: 'keep', game: '', dir_path: 'p' });
+  updateRecording(db, id, {});
+  updateRecording(db, id, { ended_at: undefined });
+  updateRecording(db, id, { 'pinned = 1 WHERE 1=1 --': 'x' } as never);
+  const r = getRecording(db, id)!;
+  expect(r.title).toBe('keep');
+  expect(r.ended_at).toBeNull();
+  expect(r.pinned).toBe(0);
+});
+
 test('recordings survive streamer deletion', () => {
   const db = freshDb();
   upsertStreamer(db, { login: 'x', display_name: 'X', avatar_url: '' });

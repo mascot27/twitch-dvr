@@ -78,16 +78,17 @@ export function touchLastLive(db: Db, login: string, iso: string): void {
 }
 
 // recordings
+type RecordingPatch = Partial<Pick<RecordingRow,
+  'status' | 'ended_at' | 'title' | 'game' | 'size_bytes' | 'duration_s' |
+  'pinned' | 'watched_at' | 'resume_position_s' | 'chat_offset_ms'>>;
+const ALLOWED = new Set<string>(['status', 'ended_at', 'title', 'game', 'size_bytes', 'duration_s', 'pinned', 'watched_at', 'resume_position_s', 'chat_offset_ms']);
 export function insertRecording(db: Db, r: { streamer_login: string; started_at: string; title: string; game: string; dir_path: string }): number {
   const res = db.prepare(`INSERT INTO recordings(streamer_login, started_at, title, game, status, dir_path)
     VALUES (?, ?, ?, ?, 'recording', ?)`).run(r.streamer_login, r.started_at, r.title, r.game, r.dir_path);
   return Number(res.lastInsertRowid);
 }
-type RecordingPatch = Partial<Pick<RecordingRow,
-  'status' | 'ended_at' | 'title' | 'game' | 'size_bytes' | 'duration_s' |
-  'pinned' | 'watched_at' | 'resume_position_s' | 'chat_offset_ms'>>;
 export function updateRecording(db: Db, id: number, fields: RecordingPatch): void {
-  const keys = (Object.keys(fields) as (keyof RecordingPatch)[]).filter(k => fields[k] !== undefined);
+  const keys = (Object.keys(fields) as (keyof RecordingPatch)[]).filter(k => ALLOWED.has(k) && fields[k] !== undefined);
   if (!keys.length) return;
   const sets = keys.map(k => `${k} = ?`).join(', ');
   db.prepare(`UPDATE recordings SET ${sets} WHERE id = ?`).run(...keys.map(k => fields[k]), id);
