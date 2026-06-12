@@ -38,6 +38,8 @@ export interface RecordingRow {
   chat_offset_ms: number;
 }
 
+// s/e: start/end offsets into ChatLine.text, counted in Unicode CODE POINTS
+// (Twitch IRC emote indices), not UTF-16 units.
 export interface ChatEmote { id: string; s: number; e: number }
 
 export interface ChatLine {
