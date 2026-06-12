@@ -15,7 +15,7 @@ export interface NotifierDeps {
 }
 
 export function createNotifier({ bus, execFn }: NotifierDeps): void {
-  const run = execFn ?? ((cmd: string, args: string[]) => { execFile(cmd, args, () => { /* fire and forget */ }); });
+  const run = execFn ?? ((cmd: string, args: string[]) => { execFile(cmd, args, err => { if (err) console.warn('[notifier] osascript failed:', err.message); }); });
   const toMac = (title: string, body: string) => run('osascript', buildOsascriptArgs(title, body));
 
   // every notify event (from recorder, disk monitor, or synthesized below) hits macOS
