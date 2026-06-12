@@ -34,7 +34,7 @@ export interface Recorder {
   stopAll(): Promise<void>;
 }
 
-const MIN_FREE_BYTES = 10e9;
+export const MIN_FREE_BYTES = 10e9;
 const FAST_FAIL_MS = 30_000;   // a part that dies faster than this counts as a failure
 const FAST_FAIL_LIMIT = 5;     // consecutive fast failures before giving up
 

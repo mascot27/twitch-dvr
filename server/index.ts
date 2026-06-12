@@ -8,7 +8,7 @@ import { createBus } from './events.js';
 import { fetchStatuses, resolveUser } from './twitchGql.js';
 import { createWatcher } from './watcher.js';
 import { createChatLogger } from './chat/chatLogger.js';
-import { createRecorder, defaultSpawn } from './recorder.js';
+import { createRecorder, defaultSpawn, MIN_FREE_BYTES } from './recorder.js';
 import { finalizeRecording, salvageOnStartup } from './finalize.js';
 import { freeDiskBytes, runCleanup } from './cleanup.js';
 import { createNotifier } from './notifier.js';
@@ -25,7 +25,7 @@ async function main() {
   const watcher = createWatcher({ db, bus, fetchStatuses });
 
   const chat = createChatLogger({
-    makeSocket: () => new WebSocket('wss://irc-ws.chat.twitch.tv:443') as never,
+    makeSocket: () => new WebSocket('wss://irc-ws.chat.twitch.tv:443'),
   });
 
   // cached free-disk value, refreshed every 5 min and at boot
@@ -33,7 +33,7 @@ async function main() {
   let lastDiskWarnAt = 0;
   async function refreshDisk() {
     try { freeBytes = await freeDiskBytes(config.dataDir); } catch { /* keep last value */ }
-    if (freeBytes < 10e9 && Date.now() - lastDiskWarnAt > 3_600_000) {
+    if (freeBytes < MIN_FREE_BYTES && Date.now() - lastDiskWarnAt > 3_600_000) {
       lastDiskWarnAt = Date.now();
       bus.emit('disk-low', { freeBytes });
     }
@@ -52,7 +52,9 @@ async function main() {
 
   createNotifier({ bus });
 
+  let shuttingDown = false;
   bus.on('live', s => {
+    if (shuttingDown) return; // an in-flight tick must not spawn streamlink mid-shutdown
     if (getStreamer(db, s.login)?.auto_record) recorder.start(s.login, s);
   });
   bus.on('offline', login => {
@@ -70,12 +72,13 @@ async function main() {
   }, 3_600_000);
 
   // salvage recordings orphaned by a crash/reboot before serving anything
+  console.log('checking for recordings to salvage…');
   await salvageOnStartup(db, config.dataDir);
 
   const webDist = path.join(ROOT, 'web', 'dist');
   const app = buildServer({
     db, bus, dataDir: config.dataDir,
-    watcher: { ...watcher, requestTick: () => void watcher.tick() },
+    watcher: { ...watcher, requestTick: () => void watcher.tick().catch(err => console.error('[main] tick failed:', err)) },
     recorder,
     resolveUser,
     webDistDir: fs.existsSync(path.join(webDist, 'index.html')) ? webDist : null,
@@ -85,7 +88,6 @@ async function main() {
   watcher.start();
   console.log(`twitch-dvr listening on http://localhost:${config.port} — data in ${config.dataDir}`);
 
-  let shuttingDown = false;
   for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     process.on(sig, async () => {
       if (shuttingDown) return;
@@ -94,6 +96,7 @@ async function main() {
       watcher.stop();
       await recorder.stopAll(); // kills streamlink, finalizes mp4s
       chat.stop();
+      await chat.flush(); // don't truncate the last chat lines
       await app.close();
       process.exit(0);
     });
