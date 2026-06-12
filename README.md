@@ -43,4 +43,3 @@ npm test
 - Uses Twitch's unofficial GQL endpoint and anonymous chat — zero credentials,
   but it can break if Twitch changes things. Fixes live in `server/twitchGql.ts`.
 - Keep streamlink fresh: `brew upgrade streamlink` if recordings start failing.
-```
