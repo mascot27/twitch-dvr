@@ -54,7 +54,7 @@ export default function Player() {
           }}
           onTimeUpdate={e => setTimeMs(e.currentTarget.currentTime * 1000)}
         />
-        <ChatReplay recordingId={recId} videoTimeMs={timeMs} offsetMs={offsetMs} onNudge={nudge} />
+        <ChatReplay key={recId} recordingId={recId} videoTimeMs={timeMs} offsetMs={offsetMs} onNudge={nudge} />
       </div>
     </>
   );

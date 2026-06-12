@@ -42,7 +42,7 @@ export default function ChatReplay({ recordingId, videoTimeMs, offsetMs, onNudge
       loadingRef.current.add(k);
       api.chat(recordingId, k * WINDOW_MS, (k + 1) * WINDOW_MS)
         .then(lines => { windowsRef.current.set(k, lines); setVersion(v => v + 1); })
-        .catch(() => { /* transient; retried on next window change */ })
+        .catch(() => { /* transient; refetched only if the user seeks back into this window */ })
         .finally(() => loadingRef.current.delete(k));
     }
   }, [recordingId, currentWindow]);
