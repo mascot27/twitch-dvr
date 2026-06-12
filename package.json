@@ -9,7 +9,7 @@
     "build": "vite build --config web/vite.config.ts",
     "start": "tsx server/index.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "service:install": "tsx scripts/service.ts install",
     "service:uninstall": "tsx scripts/service.ts uninstall",
     "smoke": "tsx scripts/smoke.ts"
