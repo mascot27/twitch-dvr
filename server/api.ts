@@ -88,6 +88,11 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     });
   }
 
+  // push fresh views to SSE clients right after a mutation — the next poll tick
+  // is up to a minute away, and a toggle that takes 60s to render reads as broken
+  const pushStatus = () =>
+    bus.emit('status', { statuses: deps.watcher.getStatuses(), stale: deps.watcher.isStale() });
+
   // --- streamers
   app.get('/api/streamers', async () => ({ streamers: buildStreamerViews(deps), stale: deps.watcher.isStale() }));
 
@@ -100,6 +105,7 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     const user = await deps.resolveUser(login);
     if (!user) return reply.code(404).send({ error: `no such Twitch channel: ${login}` });
     upsertStreamer(db, { login: user.login, display_name: user.displayName, avatar_url: user.avatarUrl });
+    pushStatus();
     deps.watcher.requestTick();
     return reply.code(201).send({ login: user.login });
   });
@@ -114,6 +120,7 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
       auto_record: body.autoRecord === undefined ? undefined : (body.autoRecord ? 1 : 0),
       quality: body.quality,
     });
+    pushStatus();
     return { ok: true };
   });
 
@@ -121,6 +128,7 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     const { login } = req.params as { login: string };
     if (deps.recorder.active().includes(login)) await deps.recorder.stop(login);
     deleteStreamer(db, login);
+    pushStatus();
     return { ok: true };
   });
 
@@ -129,12 +137,14 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     const status = deps.watcher.getStatuses().find(s => s.login === login);
     if (!status?.live) return reply.code(409).send({ error: 'streamer is not live' });
     deps.recorder.start(login, status);
+    pushStatus();
     return { ok: true };
   });
 
   app.post('/api/streamers/:login/record/stop', async (req) => {
     const { login } = req.params as { login: string };
     await deps.recorder.stop(login);
+    pushStatus();
     return { ok: true };
   });
 
