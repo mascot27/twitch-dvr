@@ -29,7 +29,7 @@ const fakeExec: ExecFn = async (cmd, args, opts) => {
   return '';
 };
 
-test('buildConcatList formats and escapes', () => {
+test('buildConcatList formats entries (inputs are regex-constrained part names)', () => {
   expect(buildConcatList(['part-001.ts', 'part-002.ts'])).toBe("file 'part-001.ts'\nfile 'part-002.ts'\n");
 });
 
@@ -82,4 +82,31 @@ test('salvageOnStartup finalizes orphaned recordings and fails empty ones', asyn
   expect(getRecording(db, recId)!.status).toBe('ready');   // salvaged
   expect(getRecording(db, rec2)!.status).toBe('failed');   // no parts
   expect(getRecording(db, rec3)!.status).toBe('ready');    // untouched
+});
+
+test('salvage recovers a finalizing recording whose parts were already cleaned', async () => {
+  updateRecording(db, recId, { status: 'finalizing', ended_at: '2026-06-12T21:00:00Z' });
+  fs.writeFileSync(path.join(absDir, 'video.mp4'), 'VID');
+  await salvageOnStartup(db, dataDir, fakeExec);
+  const rec = getRecording(db, recId)!;
+  expect(rec.status).toBe('ready');
+  expect(rec.duration_s).toBeCloseTo(4520.25);
+  expect(calls.some(c => c.cmd === 'ffmpeg' && c.args.includes('concat'))).toBe(false); // no re-concat
+});
+
+test('parts concat in numeric order past 999', async () => {
+  for (const n of ['998', '999', '1000', '1001']) fs.writeFileSync(path.join(absDir, `part-${n}.ts`), 'X');
+  let concatList = '';
+  const exec: ExecFn = async (cmd, args, opts) => {
+    calls.push({ cmd, args });
+    const cwd = (opts as { cwd: string }).cwd;
+    if (cmd === 'ffmpeg' && args.includes('concat')) {
+      concatList = fs.readFileSync(path.join(cwd, 'parts.txt'), 'utf8');
+      fs.writeFileSync(path.join(cwd, 'video.mp4'), 'V');
+    }
+    if (cmd === 'ffprobe') return '10\n';
+    return '';
+  };
+  await finalizeRecording(db, recId, absDir, exec);
+  expect(concatList).toBe("file 'part-998.ts'\nfile 'part-999.ts'\nfile 'part-1000.ts'\nfile 'part-1001.ts'\n");
 });

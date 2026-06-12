@@ -22,12 +22,19 @@ export async function finalizeRecording(db: Db, recId: number, absDir: string, e
   if (!rec) throw new Error(`recording ${recId} not found`);
 
   const entries = await fs.readdir(absDir);
-  const parts = entries.filter(f => /^part-\d+\.ts$/.test(f)).sort();
-  if (!parts.length) throw new Error('no part files to finalize');
-
-  await fs.writeFile(path.join(absDir, 'parts.txt'), buildConcatList(parts));
-  await exec('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', 'parts.txt',
-    '-c', 'copy', '-movflags', '+faststart', 'video.mp4'], { cwd: absDir });
+  const parts = entries.filter(f => /^part-\d+\.ts$/.test(f))
+    .sort((a, b) => parseInt(a.slice(5), 10) - parseInt(b.slice(5), 10));
+  const videoExists = await fs.stat(path.join(absDir, 'video.mp4')).then(() => true, () => false);
+  if (parts.length) {
+    await fs.writeFile(path.join(absDir, 'parts.txt'), buildConcatList(parts));
+    // -c copy concat: parts + output coexist until cleanup, so peak disk is ~2x
+    // the recording size (faststart adds a temp file on top)
+    await exec('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', 'parts.txt',
+      '-c', 'copy', '-movflags', '+faststart', 'video.mp4'], { cwd: absDir });
+  } else if (!videoExists) {
+    throw new Error('no part files to finalize');
+  }
+  // else: crash-recovery — parts already cleaned, completed video.mp4 present; skip concat
 
   const durOut = await exec('ffprobe', ['-v', 'error', '-show_entries', 'format=duration',
     '-of', 'csv=p=0', 'video.mp4'], { cwd: absDir });
@@ -50,9 +57,10 @@ export async function finalizeRecording(db: Db, recId: number, absDir: string, e
     started_at: rec.started_at, ended_at: endedAt, duration_s: duration,
   }, null, 2));
 
-  for (const p of [...parts, 'parts.txt']) await fs.rm(path.join(absDir, p), { force: true });
-
   updateRecording(db, recId, { status: 'ready', ended_at: endedAt, duration_s: duration, size_bytes: size });
+  // deletion last: a crash here leaves stray parts on a 'ready' row (benign),
+  // never a 'finalizing' row with half its parts gone (re-concat would truncate)
+  for (const p of [...parts, 'parts.txt']) await fs.rm(path.join(absDir, p), { force: true });
 }
 
 export async function salvageOnStartup(db: Db, dataDir: string, exec: ExecFn = runExec): Promise<void> {
@@ -60,7 +68,8 @@ export async function salvageOnStartup(db: Db, dataDir: string, exec: ExecFn = r
     const absDir = path.join(dataDir, rec.dir_path);
     try {
       await finalizeRecording(db, rec.id, absDir, exec);
-    } catch {
+    } catch (err) {
+      console.error(`[finalize] salvage failed for ${rec.dir_path}:`, err);
       updateRecording(db, rec.id, { status: 'failed', ended_at: rec.ended_at ?? nowIso() });
     }
   }
