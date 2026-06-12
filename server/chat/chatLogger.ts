@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import { parseIrcLine, toChatLine } from './irc.js';
 
+// Assumes a message-framed transport (WebSocket): each 'message' event carries
+// whole IRC lines. A raw TCP socket would split lines across 'data' events.
 export interface SocketLike {
   on(ev: string, cb: (...a: any[]) => void): void;
   send(d: string): void;
@@ -32,16 +34,16 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
   let pending: Promise<void> = Promise.resolve();
 
   function connect() {
-    if (sock || stopped) return;
+    if (sock || stopped || channels.size === 0) return;
     const s = (sock = deps.makeSocket());
     s.on('open', () => {
       open = true;
-      reconnectDelay = deps.reconnectDelayMs ?? 1000;
       s.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
       s.send(`NICK justinfan${10000 + Math.floor(Math.random() * 80000)}`);
       for (const login of channels.keys()) s.send(`JOIN #${login}`);
     });
     s.on('message', (data: Buffer | string) => {
+      reconnectDelay = deps.reconnectDelayMs ?? 1000;
       for (const raw of String(data).split('\r\n')) {
         const m = parseIrcLine(raw);
         if (!m) continue;
@@ -67,6 +69,7 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
   }
 
   function part(login: string): void {
+    login = login.toLowerCase();
     const chan = channels.get(login);
     if (!chan) return;
     channels.delete(login);
@@ -77,6 +80,7 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
 
   return {
     join(login, filePath, recordingStartedAtMs) {
+      login = login.toLowerCase();
       if (channels.has(login)) return;
       const stream = fs.createWriteStream(filePath, { flags: 'a' });
       // a stream 'error' with no handler crashes the process; log instead — chat

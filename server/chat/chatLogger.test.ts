@@ -85,3 +85,46 @@ test('reconnects and re-JOINs active channels after close', async () => {
   sockets[1].fire('open');
   expect(sockets[1].sent).toContain('JOIN #streamerone');
 });
+
+test('parting one of two channels keeps the socket open', () => {
+  const logger = make();
+  logger.join('a', path.join(dir, 'a.jsonl'), nowMs);
+  logger.join('b', path.join(dir, 'b.jsonl'), nowMs);
+  sockets[0].fire('open');
+  let closed = false;
+  const origClose = sockets[0].close.bind(sockets[0]);
+  sockets[0].close = () => { closed = true; origClose(); };
+  logger.part('a');
+  expect(closed).toBe(false);
+  logger.part('b');
+  expect(closed).toBe(true);
+});
+
+test('backoff does not reset on open alone (accept-then-drop storm)', async () => {
+  const logger = make(); // reconnectDelayMs: 1
+  logger.join('a', path.join(dir, 'a.jsonl'), nowMs);
+  sockets[0].fire('open');
+  sockets[0].fire('close');           // no message received -> delay doubles to 2
+  await new Promise(r => setTimeout(r, 10));
+  expect(sockets.length).toBe(2);
+  sockets[1].fire('open');            // open alone must NOT reset delay
+  sockets[1].fire('close');           // doubles to 4
+  await new Promise(r => setTimeout(r, 10));
+  expect(sockets.length).toBe(3);
+  sockets[2].fire('open');
+  sockets[2].fire('message', Buffer.from('PING :tmi.twitch.tv\r\n')); // healthy signal resets
+  sockets[2].fire('close');
+  await new Promise(r => setTimeout(r, 10));
+  expect(sockets.length).toBe(4);
+});
+
+test('mixed-case login still routes lowercase channel messages', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('Streamerone', file, nowMs - 1000);
+  sockets[0].fire('open');
+  expect(sockets[0].sent).toContain('JOIN #streamerone');
+  sockets[0].fire('message', Buffer.from(RAW('streamerone', 'hi') + '\r\n'));
+  await logger.flush();
+  expect(fs.readFileSync(file, 'utf8')).toContain('hi');
+});
