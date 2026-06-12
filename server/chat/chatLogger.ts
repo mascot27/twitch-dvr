@@ -79,7 +79,9 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
     join(login, filePath, recordingStartedAtMs) {
       if (channels.has(login)) return;
       const stream = fs.createWriteStream(filePath, { flags: 'a' });
-      stream.on('error', () => { /* ignore; e.g. dir removed in tests */ });
+      // a stream 'error' with no handler crashes the process; log instead — chat
+      // logging must never take down active video recordings
+      stream.on('error', err => console.error(`[chat] write failed for #${login}:`, err.message));
       channels.set(login, { stream, startedAtMs: recordingStartedAtMs });
       if (open && sock) sock.send(`JOIN #${login}`);
       else connect();
