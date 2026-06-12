@@ -36,7 +36,7 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
     try {
       const logins = listStreamers(db).map(s => s.login);
 
-      // Fix 2: prune state for logins no longer tracked
+      // prune state for logins no longer tracked (removed streamers must not leave stale live-state)
       const known = new Set(logins);
       for (const k of [...consideredLive.keys()]) {
         if (!known.has(k)) { consideredLive.delete(k); offlineCount.delete(k); }
@@ -44,7 +44,7 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
 
       if (!logins.length) {
         lastStatuses = [];
-        // Fix 3: report real staleness in empty-streamers branch
+        
         bus.emit('status', { statuses: [], stale: isStale() });
         return;
       }
@@ -58,7 +58,7 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
         return;
       }
       for (const s of statuses) {
-        // Fix 4: don't clobber stored avatars with ''
+        // missing-user placeholders carry an empty avatarUrl — never clobber a stored avatar
         if (s.avatarUrl) updateStreamerMeta(db, s.login, s.displayName, s.avatarUrl);
         const wasLive = consideredLive.get(s.login) ?? false;
         if (s.live) {
@@ -87,7 +87,7 @@ export function createWatcher({ db, bus, fetchStatuses }: WatcherDeps): Watcher 
 
   function isStale(): boolean { return failCount >= STALE_AFTER_FAILURES; }
 
-  // Fix 1: wrap tick so a throwing listener doesn't kill the schedule loop
+  // bus.emit runs listeners synchronously — a throwing listener must not kill the poll loop
   const safeTick = () => tick().catch(err => console.error('[watcher] tick failed', err));
 
   return {
