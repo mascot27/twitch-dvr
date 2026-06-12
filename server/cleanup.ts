@@ -6,6 +6,7 @@ import type { RecordingRow } from './types.js';
 type CleanupCandidate = Pick<RecordingRow, 'id' | 'size_bytes' | 'pinned' | 'started_at' | 'status'>;
 
 export function pickDeletions(recs: CleanupCandidate[], capBytes: number): number[] {
+  if (!Number.isFinite(capBytes)) return []; // a NaN cap must never select everything for deletion
   const ready = recs.filter(r => r.status === 'ready');
   let total = ready.reduce((s, r) => s + r.size_bytes, 0);
   const victims: number[] = [];

@@ -186,14 +186,26 @@ test('gives up after repeated immediate exits', async () => {
   const bodies: string[] = [];
   bus.on('notify', n => bodies.push(n.body));
   recorder.start('streamerone', STATUS);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 1; i <= 5; i++) {
     const sl = spawned.filter(s => s.cmd === 'streamlink');
     sl[sl.length - 1].child.exit(1);
-    await new Promise(r => setTimeout(r, 15));
+    if (i < 5) await vi.waitFor(() => expect(spawned.filter(s => s.cmd === 'streamlink')).toHaveLength(i + 1), { timeout: 2000 });
   }
   await vi.waitFor(() => expect(recorder.active()).toEqual([]));
   expect(bodies.some(b => b.includes('giving up'))).toBe(true);
   expect(spawned.filter(s => s.cmd === 'streamlink')).toHaveLength(5);
+});
+
+test('restart delay backs off and resets after a healthy part', async () => {
+  const { recorder } = make(); // restartDelayMs: 5
+  recorder.start('streamerone', STATUS);
+  // first failure -> restart after ~5ms
+  spawned[0].child.exit(1);
+  await vi.waitFor(() => expect(spawned.filter(s => s.cmd === 'streamlink')).toHaveLength(2), { timeout: 1000 });
+  // second failure -> restart after ~10ms (backed off, still < 100ms)
+  spawned.filter(s => s.cmd === 'streamlink')[1].child.exit(1);
+  await vi.waitFor(() => expect(spawned.filter(s => s.cmd === 'streamlink')).toHaveLength(3), { timeout: 1000 });
+  await recorder.stop('streamerone');
 });
 
 test('same-minute restart gets a distinct directory', async () => {

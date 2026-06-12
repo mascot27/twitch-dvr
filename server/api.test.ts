@@ -41,7 +41,7 @@ beforeEach(async () => {
   });
   await app.ready();
 });
-afterEach(async () => { await app.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
+afterEach(async () => { await app.close().catch(() => {}); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
 test('POST /api/streamers resolves and stores; rejects unknown and garbage', async () => {
   let res = await app.inject({ method: 'POST', url: '/api/streamers', payload: { nameOrUrl: 'https://twitch.tv/Streamerone' } });
@@ -134,6 +134,8 @@ test('settings get/patch', async () => {
   expect(res.statusCode).toBe(200);
   res = await app.inject({ method: 'GET', url: '/api/settings' });
   expect(res.json()).toMatchObject({ diskCapGb: 250, pollIntervalS: 45 });
+  res = await app.inject({ method: 'PATCH', url: '/api/settings', payload: { diskCapGb: true } });
+  expect(res.statusCode).toBe(400);
 });
 
 test('media serving with range support', async () => {
@@ -184,4 +186,14 @@ test('SSE endpoint streams bus events', async () => {
   expect(text).toContain('event: status');  // initial snapshot
   expect(text).toContain('event: notify');
   expect(text).toContain('"title":"T"');
+});
+
+test('app.close() resolves while an SSE client is connected', async () => {
+  // hijacked SSE replies never end; forceCloseConnections must let close() finish
+  const res = await app.inject({ method: 'GET', url: '/api/events', payloadAsStream: true });
+  expect(res.statusCode).toBe(200);
+  await expect(Promise.race([
+    app.close().then(() => 'closed'),
+    new Promise(r => setTimeout(() => r('timeout'), 3000)),
+  ])).resolves.toBe('closed');
 });

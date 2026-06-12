@@ -50,6 +50,7 @@ interface Job {
   timer: NodeJS.Timeout | null;
   stopping: boolean;
   fastFails: number;
+  currentDelay: number;
   spawnedAt: number;
   spawnFailed: boolean;
 }
@@ -94,7 +95,12 @@ export function createRecorder(deps: RecorderDeps): Recorder {
     job.child.on('exit', () => {
       closeErrFd(job);
       if (job.stopping) return;
-      job.fastFails = Date.now() - job.spawnedAt < FAST_FAIL_MS ? job.fastFails + 1 : 0;
+      if (Date.now() - job.spawnedAt < FAST_FAIL_MS) {
+        job.fastFails++;
+      } else {
+        job.fastFails = 0;
+        job.currentDelay = restartDelay;
+      }
       if (job.fastFails >= FAST_FAIL_LIMIT) {
         abandon(job, `streamlink keeps exiting immediately (${FAST_FAIL_LIMIT}x) — giving up`);
         return;
@@ -105,7 +111,10 @@ export function createRecorder(deps: RecorderDeps): Recorder {
       }
       if (deps.isLive(job.login)) {
         job.partNo++;
-        job.timer = setTimeout(() => spawnPart(job), restartDelay);
+        job.timer = setTimeout(() => spawnPart(job), job.currentDelay);
+        // spec: 10s backing off to 60s — keeps end-of-stream fast-fails from
+        // hitting the give-up cap before the watcher's offline debounce fires
+        job.currentDelay = Math.min(job.currentDelay * 2, 60_000);
       } else {
         stop(job.login).catch(err => console.error(`[recorder] stop (${job.login}):`, err));
       }
@@ -136,7 +145,7 @@ export function createRecorder(deps: RecorderDeps): Recorder {
     const job: Job = {
       recId, login, absDir, partNo: 1, quality,
       child: null, caffeinate: null, errFd: null, timer: null,
-      stopping: false, fastFails: 0, spawnedAt: 0, spawnFailed: false,
+      stopping: false, fastFails: 0, currentDelay: restartDelay, spawnedAt: 0, spawnFailed: false,
     };
     jobs.set(login, job);
     deps.chat.join(login, path.join(absDir, 'chat.jsonl'), Date.now());

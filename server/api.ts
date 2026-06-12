@@ -69,7 +69,8 @@ function rowToDto(r: RecordingRow) {
 
 export function buildServer(deps: ApiDeps): FastifyInstance {
   const { db, bus, dataDir } = deps;
-  const app = Fastify({ ajv: { customOptions: { coerceTypes: false } } });
+  // SSE connections never end on their own; without this app.close() waits forever
+  const app = Fastify({ forceCloseConnections: true, ajv: { customOptions: { coerceTypes: false } } });
 
   const recordingsRoot = path.join(dataDir, 'recordings');
   fs.mkdirSync(recordingsRoot, { recursive: true });
@@ -209,7 +210,9 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     dataDir,
   }));
 
-  app.patch('/api/settings', async (req, reply) => {
+  app.patch('/api/settings', {
+    schema: { body: { type: 'object', properties: { diskCapGb: { type: 'number', exclusiveMinimum: 0 }, pollIntervalS: { type: 'number', minimum: 30 } }, additionalProperties: false } },
+  }, async (req, reply) => {
     const b = req.body as { diskCapGb?: number; pollIntervalS?: number };
     if (b.diskCapGb !== undefined) {
       if (!(b.diskCapGb > 0)) return reply.code(400).send({ error: 'diskCapGb must be > 0' });

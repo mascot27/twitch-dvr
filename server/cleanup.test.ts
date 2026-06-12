@@ -26,6 +26,10 @@ test('pickDeletions ignores non-ready rows', () => {
   expect(pickDeletions(recs, 50)).toEqual([2]);
 });
 
+test('pickDeletions with a non-finite cap deletes nothing', () => {
+  expect(pickDeletions([rec(1, 50, false, '2026-01-01')], NaN)).toEqual([]);
+});
+
 let db: Db; let dataDir: string;
 beforeEach(() => {
   db = openDb(':memory:');
