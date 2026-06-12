@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { buildStatusBody, parseLoginFromInput, parseStatusResponse } from './twitchGql.js';
+import { buildStatusBody, extractUser, parseLoginFromInput, parseStatusResponse } from './twitchGql.js';
 
 test('parseLoginFromInput handles URLs and bare names', () => {
   expect(parseLoginFromInput('https://www.twitch.tv/streamertwo')).toBe('streamertwo');
@@ -42,4 +42,21 @@ test('parseStatusResponse maps live, offline and missing users', () => {
 test('parseStatusResponse tolerates malformed payloads', () => {
   const out = parseStatusResponse(['a'], 'garbage');
   expect(out[0].live).toBe(false);
+});
+
+test('parseLoginFromInput rejects reserved twitch.tv paths but allows them as bare names', () => {
+  expect(parseLoginFromInput('https://twitch.tv/videos/2161234567')).toBeNull();
+  expect(parseLoginFromInput('twitch.tv/directory/category/just-chatting')).toBeNull();
+  expect(parseLoginFromInput('videos')).toBe('videos'); // bare name: user's explicit intent
+});
+
+test('extractUser returns user, null for missing, and throws on gql errors', () => {
+  expect(extractUser([{ data: { user: { login: 'a' } } }], 0)).toEqual({ login: 'a' });
+  expect(extractUser([{ data: { user: null } }], 0)).toBeNull();
+  expect(extractUser('garbage', 0)).toBeNull();
+  expect(() => extractUser([{ errors: [{ message: 'rate limited' }] }], 0)).toThrow(/gql error/);
+});
+
+test('parseStatusResponse propagates per-entry gql errors instead of mapping to offline', () => {
+  expect(() => parseStatusResponse(['a'], [{ errors: [{ message: 'integrity' }] }])).toThrow(/gql error/);
 });
