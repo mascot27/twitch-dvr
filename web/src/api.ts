@@ -10,6 +10,8 @@ export interface RecordingView {
   sizeBytes: number; durationS: number; pinned: boolean; watchedAt: string | null;
   resumePositionS: number; chatOffsetMs: number; videoUrl: string; thumbUrl: string;
 }
+// s/e: offsets into ChatLine.text counted in Unicode CODE POINTS (Twitch IRC
+// emote indices), not UTF-16 units — split with Array.from, never slice().
 export interface ChatEmote { id: string; s: number; e: number }
 export interface ChatLine {
   t: number; type: 'msg' | 'system';
