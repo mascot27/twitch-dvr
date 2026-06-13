@@ -57,7 +57,7 @@ export interface ChatLine {
 export interface DeletionRecord {
   t: number;                 // ms since recording start
   kind: 'message' | 'user';
-  user: string;              // CLEARMSG login / CLEARCHAT target (lowercase login)
+  user: string;              // CLEARMSG login / CLEARCHAT target (lowercase login); '' only if a CLEARMSG login tag is absent (not seen in practice)
   targetId?: string;         // CLEARMSG: id of the deleted message
   durationS?: number;        // CLEARCHAT timeout seconds; absent = permanent ban
 }

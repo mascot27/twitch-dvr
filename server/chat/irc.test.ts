@@ -80,3 +80,13 @@ test('toDeletion ignores full-chat clears and non-deletion commands', () => {
   expect(toDeletion(parseIrcLine(clearmsgNoTarget)!, 1)).toBeNull();
   expect(toDeletion(parseIrcLine('@id=abc :a!a@a PRIVMSG #streamerone :hi')!, 1)).toBeNull();
 });
+
+test('toChatLine omits id when the PRIVMSG has no id tag', () => {
+  const line = toChatLine(parseIrcLine(':a!a@a PRIVMSG #streamerone :hello')!, 1)!;
+  expect(line.id).toBeUndefined();
+});
+
+test('toDeletion treats a malformed ban-duration as a ban (no duration)', () => {
+  const raw = '@ban-duration=notanumber;tmi-sent-ts=1 :tmi.twitch.tv CLEARCHAT #streamerone :baduser';
+  expect(toDeletion(parseIrcLine(raw)!, 7000)).toEqual({ t: 7000, kind: 'user', user: 'baduser' });
+});

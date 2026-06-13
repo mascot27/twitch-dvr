@@ -92,13 +92,15 @@ export function toDeletion(m: IrcMessage, t: number): DeletionRecord | null {
   if (m.command === 'CLEARMSG') {
     const targetId = m.tags['target-msg-id'];
     if (!targetId) return null;
+    // login is always present on a real CLEARMSG; '' is harmless since message-kind
+    // records are matched downstream by targetId, not user
     return { t, kind: 'message', user: m.tags['login'] ?? '', targetId };
   }
   if (m.command === 'CLEARCHAT') {
     const user = m.params[1]; // trailing param = the timed-out/banned username
     if (!user) return null;    // no user = full-chat clear (out of scope)
-    const dur = m.tags['ban-duration'];
-    return dur ? { t, kind: 'user', user, durationS: Number(dur) } : { t, kind: 'user', user };
+    const dur = Number(m.tags['ban-duration']);
+    return Number.isFinite(dur) ? { t, kind: 'user', user, durationS: dur } : { t, kind: 'user', user };
   }
   return null;
 }
