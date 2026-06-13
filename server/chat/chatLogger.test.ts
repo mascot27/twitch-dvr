@@ -153,3 +153,47 @@ test('mixed-case login still routes lowercase channel messages', async () => {
   await logger.flush();
   expect(fs.readFileSync(file, 'utf8')).toContain('hi');
 });
+
+test('routes CLEARMSG/CLEARCHAT to deletions.jsonl and keeps message id in chat.jsonl', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('streamerone', file, nowMs); // t = now - started = 0
+  sockets[0].fire('open');
+  const privmsg  = '@id=msg-1;display-name=Fan;color=#FFF;badges=;emotes= :fan!fan@fan.tmi.twitch.tv PRIVMSG #streamerone :hi there';
+  const clearmsg = '@login=fan;target-msg-id=msg-1;tmi-sent-ts=1 :tmi.twitch.tv CLEARMSG #streamerone :hi there';
+  const clearchat = '@ban-duration=600;tmi-sent-ts=2 :tmi.twitch.tv CLEARCHAT #streamerone :baduser';
+  sockets[0].fire('message', Buffer.from([privmsg, clearmsg, clearchat].join('\r\n') + '\r\n'));
+  await logger.flush();
+
+  const chat = fs.readFileSync(file, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+  expect(chat).toHaveLength(1);          // deletions are NOT in chat.jsonl
+  expect(chat[0].id).toBe('msg-1');      // message id captured
+
+  const dels = fs.readFileSync(path.join(dir, 'deletions.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l));
+  expect(dels).toEqual([
+    { t: 0, kind: 'message', user: 'fan', targetId: 'msg-1' },
+    { t: 0, kind: 'user', user: 'baduser', durationS: 600 },
+  ]);
+});
+
+test('flushes queued deletions before the sidecar stream ends on part', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('streamerone', file, nowMs);
+  sockets[0].fire('open');
+  sockets[0].fire('message', Buffer.from('@login=fan;target-msg-id=m9;tmi-sent-ts=1 :tmi.twitch.tv CLEARMSG #streamerone :bye\r\n'));
+  logger.part('streamerone'); // must not race ahead of the queued deletion write
+  await logger.flush();
+  expect(fs.readFileSync(path.join(dir, 'deletions.jsonl'), 'utf8')).toContain('m9');
+});
+
+test('stop() flushes queued deletions before the sidecar stream ends', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('streamerone', file, nowMs);
+  sockets[0].fire('open');
+  sockets[0].fire('message', Buffer.from('@login=fan;target-msg-id=m7;tmi-sent-ts=1 :tmi.twitch.tv CLEARMSG #streamerone :bye\r\n'));
+  logger.stop();        // shutdown path: parts all channels
+  await logger.flush();
+  expect(fs.readFileSync(path.join(dir, 'deletions.jsonl'), 'utf8')).toContain('m7');
+});

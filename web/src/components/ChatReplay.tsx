@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, type ChatLine } from '../api';
 import { badgeUrl, emoteUrl, segmentMessage } from '../emotes';
+import { buildDeletionIndex, classifyDeletion, type DeletionIndex } from '../deletions';
 
 const WINDOW_MS = 120_000;
 const MAX_VISIBLE = 150;
 
-function Line({ line }: { line: ChatLine }) {
+function Line({ line, deleted, reason }: { line: ChatLine; deleted: boolean; reason: string }) {
   if (line.type === 'system') return <div className="chatline system">{line.text}</div>;
   return (
-    <div className="chatline">
+    <div className={`chatline${deleted ? ' deleted' : ''}`}>
+      {deleted && <span className="del-tag" title={reason}>deleted</span>}
       {(line.badges ?? []).map(b => {
         const url = badgeUrl(b);
         return url ? <img key={b} className="badgeicon" src={url} alt={b} title={b} /> : null;
@@ -32,6 +34,12 @@ export default function ChatReplay({ recordingId, videoTimeMs, offsetMs, onNudge
   const windowsRef = useRef(new Map<number, ChatLine[]>());
   const loadingRef = useRef(new Set<number>());
   const [version, setVersion] = useState(0);
+  const [delIndex, setDelIndex] = useState<DeletionIndex>({ deletedIds: new Set(), userClears: [] });
+  useEffect(() => {
+    api.deletions(recordingId)
+      .then(recs => setDelIndex(buildDeletionIndex(recs)))
+      .catch(() => { /* old recordings have no deletions; leave the index empty */ });
+  }, [recordingId]);
   const logRef = useRef<HTMLDivElement>(null);
   const chatTimeMs = videoTimeMs + offsetMs;
   const currentWindow = Math.max(0, Math.floor(chatTimeMs / WINDOW_MS));
@@ -75,7 +83,10 @@ export default function ChatReplay({ recordingId, videoTimeMs, offsetMs, onNudge
         </span>
       </div>
       <div className="chatlog" ref={logRef}>
-        {visible.map((l, i) => <Line key={`${l.t}-${i}`} line={l} />)}
+        {visible.map((l, i) => {
+          const d = classifyDeletion(l, delIndex);
+          return <Line key={`${l.t}-${i}`} line={l} deleted={d.deleted} reason={d.reason} />;
+        })}
         {!visible.length && <div className="muted">No chat messages yet at this point.</div>}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import type { ChatEmote, ChatLine } from '../types.js';
+import type { ChatEmote, ChatLine, DeletionRecord } from '../types.js';
 
 export interface IrcMessage {
   tags: Record<string, string>;
@@ -71,7 +71,7 @@ export function toChatLine(m: IrcMessage, t: number): ChatLine | null {
     const text = m.params[1] ?? '';
     const user = m.prefix?.split('!')[0] ?? 'unknown';
     return {
-      t, type: 'msg', user,
+      t, type: 'msg', id: m.tags['id'] || undefined, user,
       display: m.tags['display-name'] || user,
       color: m.tags['color'] || undefined,
       badges: parseBadges(m.tags['badges'] ?? ''),
@@ -84,6 +84,23 @@ export function toChatLine(m: IrcMessage, t: number): ChatLine | null {
     if (!sys) return null;
     const userText = m.params[1];
     return { t, type: 'system', text: userText ? `${sys} — ${userText}` : sys };
+  }
+  return null;
+}
+
+export function toDeletion(m: IrcMessage, t: number): DeletionRecord | null {
+  if (m.command === 'CLEARMSG') {
+    const targetId = m.tags['target-msg-id'];
+    if (!targetId) return null;
+    // login is always present on a real CLEARMSG; '' is harmless since message-kind
+    // records are matched downstream by targetId, not user
+    return { t, kind: 'message', user: m.tags['login'] ?? '', targetId };
+  }
+  if (m.command === 'CLEARCHAT') {
+    const user = m.params[1]; // trailing param = the timed-out/banned username
+    if (!user) return null;    // no user = full-chat clear (out of scope)
+    const dur = Number(m.tags['ban-duration']);
+    return Number.isFinite(dur) ? { t, kind: 'user', user, durationS: dur } : { t, kind: 'user', user };
   }
   return null;
 }

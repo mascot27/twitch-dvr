@@ -69,3 +69,8 @@ input, select { background: var(--bg3); color: var(--fg); border: 1px solid #3a3
 
 .settings-form { display: grid; gap: 12px; max-width: 460px; background: var(--bg2); padding: 16px; border-radius: var(--radius); margin-top: 12px; }
 .settings-form label { display: grid; gap: 4px; }
+
+.chatline.deleted { background: rgba(235, 4, 0, 0.12); border-radius: 4px; text-decoration: line-through; }
+.chatline.deleted .del-tag { text-decoration: none; }
+.del-tag { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  color: #ff8080; border: 1px solid #ff8080; border-radius: 3px; padding: 0 4px; margin-right: 5px; vertical-align: middle; }

@@ -15,8 +15,16 @@ export interface RecordingView {
 export interface ChatEmote { id: string; s: number; e: number }
 export interface ChatLine {
   t: number; type: 'msg' | 'system';
+  id?: string;
   user?: string; display?: string; color?: string; badges?: string[];
   text: string; emotes?: ChatEmote[];
+}
+export interface DeletionRecord {
+  t: number;
+  kind: 'message' | 'user';
+  user: string;
+  targetId?: string;
+  durationS?: number;
 }
 export interface SettingsView { diskCapGb: number; pollIntervalS: number; dataDir: string }
 export interface DiskView { usedBytes: number; capBytes: number; freeBytes: number }
@@ -47,6 +55,7 @@ export const api = {
     req(`/api/recordings/${id}`, { method: 'PATCH', body: JSON.stringify(p) }),
   deleteRecording: (id: number) => req(`/api/recordings/${id}`, { method: 'DELETE' }),
   chat: (id: number, fromMs: number, toMs: number) => req<ChatLine[]>(`/api/recordings/${id}/chat?fromMs=${fromMs}&toMs=${toMs}`),
+  deletions: (id: number) => req<DeletionRecord[]>(`/api/recordings/${id}/deletions`),
   settings: () => req<SettingsView>('/api/settings'),
   patchSettings: (p: { diskCapGb?: number; pollIntervalS?: number }) => req('/api/settings', { method: 'PATCH', body: JSON.stringify(p) }),
   disk: () => req<DiskView>('/api/disk'),

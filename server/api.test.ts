@@ -197,3 +197,28 @@ test('app.close() resolves while an SSE client is connected', async () => {
     new Promise(r => setTimeout(() => r('timeout'), 3000)),
   ])).resolves.toBe('closed');
 });
+
+test('serves recording deletions and 404s unknown ids', async () => {
+  upsertStreamer(db, { login: 'a', display_name: 'A', avatar_url: '' });
+  const id = insertRecording(db, { streamer_login: 'a', started_at: 'now', title: '', game: '', dir_path: 'recordings/a/d' });
+  const abs = path.join(dataDir, 'recordings/a/d');
+  fs.mkdirSync(abs, { recursive: true });
+  fs.writeFileSync(path.join(abs, 'deletions.jsonl'),
+    JSON.stringify({ t: 1000, kind: 'message', user: 'x', targetId: 'm1' }) + '\n');
+
+  let res = await app.inject({ method: 'GET', url: `/api/recordings/${id}/deletions` });
+  expect(res.statusCode).toBe(200);
+  expect(res.json()).toEqual([{ t: 1000, kind: 'message', user: 'x', targetId: 'm1' }]);
+
+  res = await app.inject({ method: 'GET', url: '/api/recordings/99999/deletions' });
+  expect(res.statusCode).toBe(404);
+});
+
+test('deletions endpoint returns [] when a recording has no sidecar', async () => {
+  upsertStreamer(db, { login: 'a', display_name: 'A', avatar_url: '' });
+  const id = insertRecording(db, { streamer_login: 'a', started_at: 'now', title: '', game: '', dir_path: 'recordings/a/none' });
+  fs.mkdirSync(path.join(dataDir, 'recordings/a/none'), { recursive: true });
+  const res = await app.inject({ method: 'GET', url: `/api/recordings/${id}/deletions` });
+  expect(res.statusCode).toBe(200);
+  expect(res.json()).toEqual([]);
+});

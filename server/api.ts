@@ -9,6 +9,7 @@ import {
   updateRecording, upsertStreamer, type Db,
 } from './db.js';
 import { readChatWindow } from './chat/window.js';
+import { readDeletions } from './chat/deletions.js';
 import { parseLoginFromInput } from './twitchGql.js';
 import { freeDiskBytes } from './cleanup.js';
 import type { RecordingRow, StreamStatus } from './types.js';
@@ -201,6 +202,12 @@ export function buildServer(deps: ApiDeps): FastifyInstance {
     const fromMs = Number(q.fromMs ?? 0);
     const toMs = Number(q.toMs ?? Number.MAX_SAFE_INTEGER);
     return readChatWindow(path.join(dataDir, rec.dir_path, 'chat.jsonl'), fromMs, toMs);
+  });
+
+  app.get('/api/recordings/:id/deletions', async (req, reply) => {
+    const rec = getRecording(db, Number((req.params as any).id));
+    if (!rec) return reply.code(404).send({ error: 'not found' });
+    return readDeletions(path.join(dataDir, rec.dir_path, 'deletions.jsonl'));
   });
 
   // --- settings & disk
