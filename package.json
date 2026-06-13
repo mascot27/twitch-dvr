@@ -1,6 +1,6 @@
 {
   "name": "twitch-dvr",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "description": "Self-hosted macOS dashboard that watches Twitch streamers and automatically records their streams — video and chat — for synced replay later.",
