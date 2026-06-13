@@ -29,7 +29,7 @@ No Twitch account, API keys, or credentials required.
 
 ## What it does
 
-- **Track streamers** — add channels by name or URL (`twitch.tv/streamertwo`, `streamerone`, …) and see live/offline status update in real time.
+- **Track streamers** — add channels by name or URL (e.g. `twitch.tv/mrbeast` or just `mrbeast`) and see live/offline status update in real time.
 - **Go-live notifications** — native macOS banners and browser notifications the moment a tracked streamer starts.
 - **Automatic recording** — when a streamer goes live, their stream is recorded in the background. Several streamers live at once? Each is recorded independently and concurrently.
 - **Chat is recorded too** — every message (with names, colors, badges and emotes) is saved alongside the video.
@@ -186,7 +186,7 @@ Record a few seconds of any live channel through the real pipeline (streamlink �
 ffmpeg → chat) into a temp folder:
 
 ```bash
-npm run smoke -- <channel> [seconds]   # e.g. npm run smoke -- examplechannel 30
+npm run smoke -- <channel> [seconds]   # e.g. npm run smoke -- mrbeast 30
 ```
 
 It prints the resulting files and chat line count, and exits non-zero if the
