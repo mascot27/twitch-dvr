@@ -4,3 +4,6 @@ config.json
 data/
 *.log
 .DS_Store
+
+# internal design docs — kept locally, not published
+docs/

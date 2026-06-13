@@ -1,5 +1,9 @@
 # 📼 Twitch DVR
 
+[![CI](https://github.com/mascot27/twitch-dvr/actions/workflows/ci.yml/badge.svg)](https://github.com/mascot27/twitch-dvr/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+
 A small self-hosted dashboard for your Mac that watches a list of Twitch
 streamers, tells you when they go live, and **automatically records their
 streams — video *and* chat** — so you can browse and watch them later with the
@@ -13,15 +17,15 @@ No Twitch account, API keys, or credentials required.
 
 **Dashboard** — your tracked streamers at a glance: who's live, what they're playing, a live recording indicator, and a per-streamer quality picker to control disk use.
 
-![Dashboard](docs/images/dashboard.png)
+![Dashboard](assets/dashboard.png)
 
 **Watch later, with chat replayed in sync** — the recorded video next to its chat (emotes, badges, subs), scrolling in time with playback. Messages a moderator deleted stay visible but struck through and tagged, so you can see what was removed.
 
-![Player with synced chat replay](docs/images/player.png)
+![Player with synced chat replay](assets/player.png)
 
 **Library** — browse past recordings with thumbnails, durations and sizes; pin favourites, and watch the disk-usage bar against your cap.
 
-![Library](docs/images/library.png)
+![Library](assets/library.png)
 
 <sub>Screenshots use sample data on a demo instance.</sub>
 
@@ -203,10 +207,6 @@ A single Node process ties together a handful of focused pieces:
 - **Chat logger** joins each channel anonymously over Twitch IRC and appends messages to `chat.jsonl`.
 - **Cleanup** enforces the disk cap, oldest-first, never touching pinned recordings.
 - **API + dashboard** — a Fastify server exposes a REST + Server-Sent-Events API and serves the React dashboard; the player streams video with HTTP range requests and pages chat in windows.
-
-The whole architecture and the design decisions behind it are written up in
-[`docs/superpowers/specs/`](docs/superpowers/specs/), with the implementation
-plan in [`docs/superpowers/plans/`](docs/superpowers/plans/).
 
 ---
 

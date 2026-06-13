@@ -8,7 +8,7 @@
 //   # provide a video fixture at /tmp/ss-fixtures/{video.mp4,thumb.jpg} (any short clip)
 //   node scripts/screenshots.mjs
 //
-// Output: docs/images/{dashboard,library,player,settings}.png
+// Output: assets/{dashboard,library,player,settings}.png
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +18,7 @@ import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'web', 'dist');
 const FIX = '/tmp/ss-fixtures';
-const OUT = path.join(ROOT, 'docs', 'images');
+const OUT = path.join(ROOT, 'assets');
 const PORT = 8456;
 fs.mkdirSync(OUT, { recursive: true });
 
