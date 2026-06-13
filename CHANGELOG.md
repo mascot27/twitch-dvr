@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/mascot27/twitch-dvr/compare/twitch-dvr-v1.1.0...twitch-dvr-v1.1.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* harden path handling and config-file creation (CodeQL) ([f9a6fc6](https://github.com/mascot27/twitch-dvr/commit/f9a6fc6415b78b2ee20dd9a021982d11a810ad35))
+
 ## [1.1.0](https://github.com/mascot27/twitch-dvr/compare/twitch-dvr-v1.0.0...twitch-dvr-v1.1.0) (2026-06-13)
 
 
