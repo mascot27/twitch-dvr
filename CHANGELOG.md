@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/mascot27/twitch-dvr/compare/twitch-dvr-v1.1.1...twitch-dvr-v1.1.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* resolve+contain screenshot static paths so CodeQL recognizes the guard (js/path-injection) ([475cdb1](https://github.com/mascot27/twitch-dvr/commit/475cdb17f72e863d98b09cd0fb08925ab4096bb4))
+
 ## [1.1.1](https://github.com/mascot27/twitch-dvr/compare/twitch-dvr-v1.1.0...twitch-dvr-v1.1.1) (2026-06-13)
 
 
