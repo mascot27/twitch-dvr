@@ -1,5 +1,6 @@
 import fs from 'node:fs';
-import { parseIrcLine, toChatLine } from './irc.js';
+import path from 'node:path';
+import { parseIrcLine, toChatLine, toDeletion } from './irc.js';
 
 // Assumes a message-framed transport (WebSocket): each 'message' event carries
 // whole IRC lines. A raw TCP socket would split lines across 'data' events.
@@ -22,7 +23,7 @@ export interface ChatLogger {
   flush(): Promise<void>; // for tests: wait for pending writes
 }
 
-interface Channel { stream: fs.WriteStream; startedAtMs: number }
+interface Channel { stream: fs.WriteStream; delStream: fs.WriteStream; startedAtMs: number }
 
 export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
   const now = deps.now ?? Date.now;
@@ -51,9 +52,14 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
         const chanName = (m.params[0] ?? '').replace(/^#/, '');
         const chan = channels.get(chanName);
         if (!chan) continue;
-        const line = toChatLine(m, Math.max(0, now() - chan.startedAtMs));
+        const t = Math.max(0, now() - chan.startedAtMs);
+        const line = toChatLine(m, t);
         if (line) {
           pending = pending.then(() => new Promise<void>(res => chan.stream.write(JSON.stringify(line) + '\n', () => res())));
+        }
+        const del = toDeletion(m, t);
+        if (del) {
+          pending = pending.then(() => new Promise<void>(res => chan.delStream.write(JSON.stringify(del) + '\n', () => res())));
         }
       }
     });
@@ -75,7 +81,9 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
     channels.delete(login); // drop immediately so further messages aren't routed here
     // end the stream as the TAIL of the write chain — calling end() synchronously
     // would race ahead of lines already queued in `pending`, losing the final burst
-    pending = pending.then(() => new Promise<void>(res => chan.stream.end(res)));
+    pending = pending
+      .then(() => new Promise<void>(res => chan.stream.end(res)))
+      .then(() => new Promise<void>(res => chan.delStream.end(res)));
     if (open && sock) sock.send(`PART #${login}`);
     if (!channels.size && sock) sock.close();
   }
@@ -84,11 +92,16 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
     join(login, filePath, recordingStartedAtMs) {
       login = login.toLowerCase();
       if (channels.has(login)) return;
-      const stream = fs.createWriteStream(filePath, { flags: 'a' });
-      // a stream 'error' with no handler crashes the process; log instead — chat
-      // logging must never take down active video recordings
-      stream.on('error', err => console.error(`[chat] write failed for #${login}:`, err.message));
-      channels.set(login, { stream, startedAtMs: recordingStartedAtMs });
+      const mkStream = (p: string) => {
+        const st = fs.createWriteStream(p, { flags: 'a' });
+        // a stream 'error' with no handler crashes the process; log instead —
+        // chat logging must never take down active video recordings
+        st.on('error', err => console.error(`[chat] write failed for #${login}:`, err.message));
+        return st;
+      };
+      const stream = mkStream(filePath);
+      const delStream = mkStream(path.join(path.dirname(filePath), 'deletions.jsonl'));
+      channels.set(login, { stream, delStream, startedAtMs: recordingStartedAtMs });
       if (open && sock) sock.send(`JOIN #${login}`);
       else connect();
     },
