@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "description": "Self-hosted macOS dashboard that watches Twitch streamers and automatically records their streams — video and chat — for synced replay later.",
+  "author": "mascot27",
+  "license": "MIT",
+  "homepage": "https://github.com/mascot27/twitch-dvr#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/mascot27/twitch-dvr.git" },
+  "bugs": { "url": "https://github.com/mascot27/twitch-dvr/issues" },
+  "keywords": ["twitch", "dvr", "recording", "streamlink", "ffmpeg", "chat-replay", "self-hosted", "macos"],
   "scripts": {
     "dev:server": "tsx watch server/index.ts",
     "dev:web": "vite --config web/vite.config.ts",
@@ -14,10 +21,6 @@
     "service:uninstall": "tsx scripts/service.ts uninstall",
     "smoke": "tsx scripts/smoke.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "engines": { "node": ">=22" },
   "dependencies": {
     "@fastify/static": "^9.1.3",
