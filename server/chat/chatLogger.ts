@@ -72,8 +72,10 @@ export function createChatLogger(deps: ChatLoggerDeps): ChatLogger {
     login = login.toLowerCase();
     const chan = channels.get(login);
     if (!chan) return;
-    channels.delete(login);
-    chan.stream.end();
+    channels.delete(login); // drop immediately so further messages aren't routed here
+    // end the stream as the TAIL of the write chain — calling end() synchronously
+    // would race ahead of lines already queued in `pending`, losing the final burst
+    pending = pending.then(() => new Promise<void>(res => chan.stream.end(res)));
     if (open && sock) sock.send(`PART #${login}`);
     if (!channels.size && sock) sock.close();
   }

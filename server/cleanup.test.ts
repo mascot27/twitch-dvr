@@ -55,3 +55,15 @@ test('runCleanup deletes files and rows of victims', () => {
   expect(fs.existsSync(path.join(dataDir, 'recordings/x/a'))).toBe(false);
   expect(getRecording(db, b)).toBeDefined();
 });
+
+test('runCleanup refuses a dir_path that escapes the recordings root', () => {
+  const outside = path.join(dataDir, 'outside-marker');
+  fs.writeFileSync(outside, 'precious');
+  // a corrupt row whose dir_path would resolve outside recordings/
+  const bad = insertRecording(db, { streamer_login: 'x', started_at: '2026-01-01', title: '', game: '', dir_path: '..' });
+  updateRecording(db, bad, { status: 'ready', size_bytes: 999 });
+  const deleted = runCleanup(db, dataDir, 0); // cap 0 → everything is a victim
+  expect(deleted).not.toContain(bad);          // skipped, not deleted
+  expect(getRecording(db, bad)).toBeDefined();  // row kept
+  expect(fs.existsSync(outside)).toBe(true);    // nothing outside recordings/ touched
+});

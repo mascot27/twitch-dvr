@@ -21,15 +21,23 @@ export function pickDeletions(recs: CleanupCandidate[], capBytes: number): numbe
 }
 
 export function runCleanup(db: Db, dataDir: string, capGb: number): number[] {
+  const recordingsRoot = path.join(dataDir, 'recordings');
   const recs = listByStatus(db, ['ready']);
   const victims = pickDeletions(recs, capGb * 1e9);
   const deleted: number[] = [];
   for (const id of victims) {
     const rec = recs.find(r => r.id === id)!;
+    // defense-in-depth for an unattended deleter: a corrupt/empty/absolute dir_path
+    // would otherwise resolve to dataDir itself and recursively wipe the whole library
+    const target = path.resolve(dataDir, rec.dir_path);
+    if (target !== recordingsRoot && !target.startsWith(recordingsRoot + path.sep)) {
+      console.error(`[cleanup] refusing to delete out-of-root dir_path: ${rec.dir_path}`);
+      continue;
+    }
     // one undeletable dir must not wedge cleanup (oldest-first retries it forever)
     // or throw into the caller's timer; skip it and keep freeing space
     try {
-      fs.rmSync(path.join(dataDir, rec.dir_path), { recursive: true, force: true });
+      fs.rmSync(target, { recursive: true, force: true });
       deleteRecording(db, id);
       deleted.push(id);
     } catch (err) {

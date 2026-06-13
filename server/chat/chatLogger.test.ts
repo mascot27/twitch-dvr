@@ -75,6 +75,31 @@ test('responds to PING and stops writing after part', async () => {
   expect(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').not.toContain('late');
 });
 
+test('flushes lines queued in the same tick as part (no end-of-stream tail loss)', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('streamerone', file, nowMs);
+  sockets[0].fire('open');
+  // a final burst arrives, then the stream ends in the same tick (normal end-of-stream PART)
+  sockets[0].fire('message', Buffer.from(RAW('streamerone', 'last1') + '\r\n' + RAW('streamerone', 'last2') + '\r\n'));
+  logger.part('streamerone'); // end() must be queued AFTER the writes above, not run synchronously
+  await logger.flush();
+  const content = fs.readFileSync(file, 'utf8');
+  expect(content).toContain('last1');
+  expect(content).toContain('last2');
+});
+
+test('stop() flushes queued lines before the streams end', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('streamerone', file, nowMs);
+  sockets[0].fire('open');
+  sockets[0].fire('message', Buffer.from(RAW('streamerone', 'goodbye') + '\r\n'));
+  logger.stop();          // shutdown path: parts all channels, closes socket
+  await logger.flush();   // must still capture the line queued before stop()
+  expect(fs.readFileSync(file, 'utf8')).toContain('goodbye');
+});
+
 test('reconnects and re-JOINs active channels after close', async () => {
   const logger = make();
   logger.join('streamerone', path.join(dir, 'chat.jsonl'), nowMs);
