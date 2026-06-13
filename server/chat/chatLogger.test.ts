@@ -186,3 +186,14 @@ test('flushes queued deletions before the sidecar stream ends on part', async ()
   await logger.flush();
   expect(fs.readFileSync(path.join(dir, 'deletions.jsonl'), 'utf8')).toContain('m9');
 });
+
+test('stop() flushes queued deletions before the sidecar stream ends', async () => {
+  const logger = make();
+  const file = path.join(dir, 'chat.jsonl');
+  logger.join('streamerone', file, nowMs);
+  sockets[0].fire('open');
+  sockets[0].fire('message', Buffer.from('@login=fan;target-msg-id=m7;tmi-sent-ts=1 :tmi.twitch.tv CLEARMSG #streamerone :bye\r\n'));
+  logger.stop();        // shutdown path: parts all channels
+  await logger.flush();
+  expect(fs.readFileSync(path.join(dir, 'deletions.jsonl'), 'utf8')).toContain('m7');
+});
