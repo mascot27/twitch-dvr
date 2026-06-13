@@ -9,6 +9,24 @@ No Twitch account, API keys, or credentials required.
 
 ---
 
+## Screenshots
+
+**Dashboard** — your tracked streamers at a glance: who's live, what they're playing, a live recording indicator, and a per-streamer quality picker to control disk use.
+
+![Dashboard](docs/images/dashboard.png)
+
+**Watch later, with chat replayed in sync** — the recorded video next to its chat (emotes, badges, subs), scrolling in time with playback. Messages a moderator deleted stay visible but struck through and tagged, so you can see what was removed.
+
+![Player with synced chat replay](docs/images/player.png)
+
+**Library** — browse past recordings with thumbnails, durations and sizes; pin favourites, and watch the disk-usage bar against your cap.
+
+![Library](docs/images/library.png)
+
+<sub>Screenshots use sample data on a demo instance.</sub>
+
+---
+
 ## What it does
 
 - **Track streamers** — add channels by name or URL (`twitch.tv/streamertwo`, `streamerone`, …) and see live/offline status update in real time.
