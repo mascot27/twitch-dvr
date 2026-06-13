@@ -198,6 +198,40 @@ recording didn't come out playable.
 
 ---
 
+## Releasing
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please)
+([`.github/workflows/release-please.yml`](.github/workflows/release-please.yml)) and driven by
+your commit messages — the version number, git tag, GitHub Release, and `CHANGELOG.md` are all
+generated for you. You never bump a version or write a changelog by hand.
+
+**How it works.** Every push to `main` is scanned for
+[Conventional Commits](https://www.conventionalcommits.org). release-please keeps a single open
+**release PR** (titled `chore(main): release x.y.z`) that accumulates everything since the last
+release and previews the next version and changelog. Merging that PR is what cuts the release.
+
+The commit prefix decides the version bump:
+
+| Commit message | Example | Result |
+|---|---|---|
+| `fix: …` | `fix: guard against empty chat window` | patch — `1.1.0 → 1.1.1` |
+| `feat: …` | `feat: export recordings as MP4` | minor — `1.1.0 → 1.2.0` |
+| `feat!: …` or a `BREAKING CHANGE:` footer | `feat!: drop Node 20 support` | major — `1.1.0 → 2.0.0` |
+| `docs:`, `chore:`, `ci:`, `refactor:`, `test:` | `chore: tidy imports` | no release (still recorded in the changelog) |
+
+**To cut a new release:**
+
+1. Land your changes on `main` with Conventional Commit messages (directly, or via PRs — CI must be green).
+2. release-please opens or updates the release PR automatically. Open the **Pull requests** tab, find `chore(main): release …`, and review the proposed version and changelog.
+3. **Merge that PR.** On merge it tags the commit (`twitch-dvr-vX.Y.Z`), publishes a **GitHub Release** with generated notes, updates `CHANGELOG.md`, and bumps `package.json`.
+
+There's nothing to run locally. If no release PR is open, nothing releasable (a `feat` or `fix`) has landed since the last release.
+
+> The first tag is `twitch-dvr-v1.1.0` rather than `v1.0.0`: the project was already at `1.0.0`
+> when automation was introduced, and the existing feature history triggered a minor bump.
+
+---
+
 ## How it works
 
 A single Node process ties together a handful of focused pieces:
