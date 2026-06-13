@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, type StreamerView } from '../api';
 import { useAppState } from '../sse';
+import { QUALITY_PRESETS, presetLabel } from '../quality';
 
 function uptime(startedAt: string | null): string {
   if (!startedAt) return '';
@@ -51,6 +52,16 @@ function StreamerCard({ s }: { s: StreamerView }) {
               onChange={act(() => api.patchStreamer(s.login, { autoRecord: !s.autoRecord }))} />
             auto-record
           </label>
+          <select
+            className="quality"
+            title="Recording quality — applies to the next recording, not one in progress"
+            value={s.quality}
+            disabled={busy}
+            onChange={e => { const quality = e.target.value; act(() => api.patchStreamer(s.login, { quality }))(); }}
+          >
+            {presetLabel(s.quality) === 'Custom' && <option value={s.quality}>Custom ({s.quality})</option>}
+            {QUALITY_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
           <button disabled={busy} onClick={act(async () => {
             if (confirm(`Remove ${s.displayName}? Recordings are kept.`)) await api.deleteStreamer(s.login);
           })}>Remove</button>

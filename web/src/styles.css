@@ -74,3 +74,5 @@ input, select { background: var(--bg3); color: var(--fg); border: 1px solid #3a3
 .chatline.deleted .del-tag { text-decoration: none; }
 .del-tag { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
   color: #ff8080; border: 1px solid #ff8080; border-radius: 3px; padding: 0 4px; margin-right: 5px; vertical-align: middle; }
+
+select.quality { font-size: 12px; padding: 2px 6px; }
