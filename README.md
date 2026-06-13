@@ -57,6 +57,7 @@ live. (For an always-on setup that starts automatically, see
 - Add a channel with the box at the top (name or full URL).
 - Live cards show the title, game, uptime and viewer count, a link to watch on Twitch, and a red **REC** dot while recording.
 - Toggle **auto-record** per streamer, or hit **Record now** / **Stop recording** manually.
+- Pick a **recording quality** per streamer (Source / 720p / 480p / Audio only) to trade video fidelity for disk space — lower qualities use dramatically less (Source ~3–7 GB/h vs 480p ~0.7–1.2 GB/h). Applies to the next recording.
 - **Remove** a streamer at any time — your recordings of them are kept.
 
 **Library** (`/library`) — every recording as a thumbnail tile.
