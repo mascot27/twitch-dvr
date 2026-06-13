@@ -11,8 +11,12 @@ const DEFAULTS = { port: 8454, dataDir: '~/TwitchDVR' };
 
 export function loadConfig(rootDir: string): AppConfig {
   const file = path.join(rootDir, 'config.json');
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify(DEFAULTS, null, 2) + '\n');
+  // atomic create-if-absent ('wx' fails when the file exists) — avoids a
+  // TOCTOU race between an existence check and the write
+  try {
+    fs.writeFileSync(file, JSON.stringify(DEFAULTS, null, 2) + '\n', { flag: 'wx' });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
   }
   const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<typeof DEFAULTS>;
   return {

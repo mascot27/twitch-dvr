@@ -109,6 +109,8 @@ const server = http.createServer((req, res) => {
     return fs.createReadStream(f).pipe(res);
   }
   let f = path.join(DIST, url === '/' ? 'index.html' : url.replace(/^\//, ''));
+  // containment: a crafted ../ path must never resolve outside the built dashboard dir
+  if (!path.resolve(f).startsWith(DIST + path.sep)) f = path.join(DIST, 'index.html');
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(DIST, 'index.html'); // SPA fallback
   res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
