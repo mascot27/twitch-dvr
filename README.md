@@ -67,6 +67,7 @@ live. (For an always-on setup that starts automatically, see
 **Player** (`/watch/:id`) — video with synced chat replay.
 - Native video controls with seeking; playback position is remembered so you can resume later.
 - The chat panel replays messages in time with the video, rendering Twitch emotes and badges.
+- Messages a moderator deleted — single deletes, and messages cleared by a timeout or ban — stay visible but are highlighted in red with a strikethrough and a "deleted" tag, so you can see what was removed. (Applies to recordings made after this feature shipped.)
 - Use the **±1s / ±5s** buttons if chat drifts ahead of or behind the video — the offset is saved per recording.
 
 **Settings** (`/settings`) — disk cap (GB), how often to poll Twitch, and a button to grant browser notification permission.
