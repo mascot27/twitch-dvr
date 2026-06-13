@@ -45,10 +45,19 @@ export interface ChatEmote { id: string; s: number; e: number }
 export interface ChatLine {
   t: number; // ms since recording start
   type: 'msg' | 'system';
+  id?: string;        // Twitch message id (msg lines made after the deletion feature shipped)
   user?: string;
   display?: string;
   color?: string;
   badges?: string[];
   text: string;
   emotes?: ChatEmote[];
+}
+
+export interface DeletionRecord {
+  t: number;                 // ms since recording start
+  kind: 'message' | 'user';
+  user: string;              // CLEARMSG login / CLEARCHAT target (lowercase login)
+  targetId?: string;         // CLEARMSG: id of the deleted message
+  durationS?: number;        // CLEARCHAT timeout seconds; absent = permanent ban
 }
